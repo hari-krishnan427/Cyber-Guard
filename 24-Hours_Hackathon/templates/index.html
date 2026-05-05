@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberGuard SOC Terminal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --bg-base: #020617;
+            --bg-panel: rgba(15, 23, 42, 0.85);
+            --cyan: #00f3ff;
+            --cyan-glow: rgba(0, 243, 255, 0.5);
+            --danger: #ff003c;
+            --danger-glow: rgba(255, 0, 60, 0.5);
+            --safe: #00ff66;
+            --safe-glow: rgba(0, 255, 102, 0.5);
+            --warning: #ffea00;
+            --warning-glow: rgba(255, 234, 0, 0.5);
+            --text-main: #e2e8f0;
+            --text-muted: #64748b;
+            --font-display: 'Orbitron', sans-serif;
+            --font-mono: 'Fira Code', monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            overflow-x: hidden;
+            background-image: 
+                linear-gradient(rgba(0, 243, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 243, 255, 0.05) 1px, transparent 1px);
+            background-size: 30px 30px;
+        }
+
+        /* CRT Scanline Overlay */
+        body::after {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
+            z-index: 999;
+            background-size: 100% 3px;
+            pointer-events: none;
+        }
+
+        .container { max-width: 1200px; width: 100%; position: relative; z-index: 10; }
+
+        /* Header */
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 2px solid var(--cyan); padding-bottom: 1rem; margin-bottom: 2rem;
+            box-shadow: 0 10px 20px -10px var(--cyan-glow);
+        }
+
+        .logo { font-family: var(--font-display); font-size: 2rem; font-weight: 900; color: var(--cyan); text-shadow: 0 0 15px var(--cyan-glow); }
+        .sys-status { color: var(--safe); border: 1px solid var(--safe); padding: 5px 15px; background: rgba(0, 255, 102, 0.1); animation: blink 2s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* Control Panel */
+        .control-panel {
+            background: var(--bg-panel); border: 1px solid var(--cyan); padding: 2rem;
+            position: relative; margin-bottom: 2rem; box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+        }
+        .control-panel::before {
+            content: '[TARGET ACQUISITION]'; position: absolute; top: -12px; left: 20px;
+            background: var(--bg-base); color: var(--cyan); padding: 0 10px; font-size: 0.8rem;
+        }
+        .input-group { display: flex; gap: 1rem; }
+        input[type="url"] {
+            flex: 1; background: rgba(0, 0, 0, 0.5); border: 1px solid var(--text-muted);
+            color: var(--cyan); padding: 1rem; font-family: var(--font-mono); font-size: 1.1rem;
+        }
+        input[type="url"]:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 15px var(--cyan-glow) inset; }
+        button {
+            background: transparent; color: var(--cyan); border: 1px solid var(--cyan);
+            font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; padding: 0 2rem;
+            cursor: pointer; text-transform: uppercase; transition: all 0.3s;
+        }
+        button:hover { background: var(--cyan); color: #000; box-shadow: 0 0 20px var(--cyan-glow); }
+
+        /* Terminal Output */
+        #terminalPhase { display: none; background: #000; border: 1px solid var(--text-muted); padding: 1.5rem; margin-bottom: 2rem; height: 150px; overflow-y: hidden; }
+        .log-line { margin-bottom: 0.5rem; opacity: 0; animation: fadeInLog 0.2s forwards; font-size: 0.9rem;}
+        .log-sys { color: var(--cyan); } .log-warn { color: var(--warning); } .log-ok { color: var(--safe); }
+        @keyframes fadeInLog { to { opacity: 1; } }
+
+        /* Dashboard Layout */
+        #dashboard { display: none; flex-direction: column; gap: 1.5rem; }
+        
+        /* Panel Styling */
+        .panel { background: var(--bg-panel); border: 1px solid #334155; padding: 1.5rem; position: relative; }
+        .panel-title {
+            font-family: var(--font-display); color: var(--cyan); font-size: 1rem;
+            margin-bottom: 1rem; letter-spacing: 1px; border-bottom: 1px dashed var(--text-muted); padding-bottom: 0.5rem;
+        }
+
+        /* Top Verdict Banner */
+        #verdictPanel { display: flex; justify-content: space-between; align-items: center; border-width: 2px; }
+        .score-box { display: flex; align-items: center; gap: 2rem; }
+        .risk-score { font-family: var(--font-display); font-size: 4.5rem; font-weight: 900; line-height: 1; }
+        .verdict-info { display: flex; flex-direction: column; }
+        .verdict-text { font-size: 1.8rem; text-transform: uppercase; font-weight: bold; letter-spacing: 2px; }
+
+        /* Grid Configurations */
+        .metrics-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem; }
+        .metrics-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1.5rem; }
+
+        /* Highly Dense Data Row (Terminal Style) */
+        .data-row { display: flex; align-items: flex-end; margin-bottom: 0.6rem; font-size: 0.9rem; line-height: 1.2; }
+        .data-label { color: var(--text-muted); white-space: nowrap; }
+        .data-dots { flex-grow: 1; border-bottom: 1px dotted var(--text-muted); margin: 0 10px; opacity: 0.4; position: relative; top: -4px; }
+        .data-value { font-weight: 600; white-space: nowrap; }
+
+        /* AI Explanation Rows */
+        .ai-row { margin-bottom: 0.8rem; color: var(--text-main); line-height: 1.4; border-left: 2px solid var(--cyan); padding-left: 1rem; background: rgba(0, 243, 255, 0.05); padding: 0.5rem 1rem;}
+        .ai-row span { color: var(--cyan); font-weight: bold; margin-right: 0.5rem; }
+
+        /* Text Colors for Values */
+        .v-safe { color: var(--safe); text-shadow: 0 0 5px var(--safe-glow); }
+        .v-warn { color: var(--warning); text-shadow: 0 0 5px var(--warning-glow); }
+        .v-danger { color: var(--danger); text-shadow: 0 0 5px var(--danger-glow); }
+        .v-cyan { color: var(--cyan); text-shadow: 0 0 5px var(--cyan-glow); }
+
+        .placeholder-text { color: var(--text-muted); font-style: italic; opacity: 0.5; animation: pulse-text 2s infinite; text-align: center; margin-top: 1rem; }
+        @keyframes pulse-text { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.8; } }
+
+        @media (max-width: 1024px) { .metrics-grid-3, .metrics-grid-2 { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 768px) { .metrics-grid-3, .metrics-grid-2 { grid-template-columns: 1fr; } #verdictPanel { flex-direction: column; text-align: center; gap: 1rem; } .score-box { flex-direction: column; } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <div class="logo"><i class="fas fa-satellite-dish"></i> CyberGuard</div>
+            <div class="sys-status">[ SYSTEM ONLINE ]</div>
+        </header>
+
+        <div class="control-panel">
+            <div class="input-group">
+                <input type="url" id="urlInput" placeholder="Enter target URL (e.g., https://suspicious.com)" required>
+                <button id="scanBtn" onclick="initiateScan()">EXECUTE SCAN</button>
+            </div>
+        </div>
+
+        <div id="terminalPhase">
+            <div id="terminalContent"></div>
+        </div>
+
+        <div id="dashboard">
+            <div class="panel" id="verdictPanel">
+                <div class="score-box">
+                    <div id="verdictIcon" style="font-size: 3.5rem; color: var(--text-muted);"><i class="fas fa-crosshairs"></i></div>
+                    <div class="verdict-info">
+                        <div class="verdict-text" id="verdictTextDisp" style="color: var(--text-muted);">AWAITING TARGET</div>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.5rem;">CALCULATED THREAT SCORE</div>
+                    <div class="risk-score" id="riskScoreDisp" style="color: var(--text-muted);">--</div>
+                </div>
+            </div>
+
+            <div class="metrics-grid-3">
+                <div class="panel">
+                    <div class="panel-title">[0] TARGET OVERVIEW</div>
+                    <div id="overviewMetrics"><div class="placeholder-text">[ WAITING FOR TELEMETRY ]</div></div>
+                </div>
+                <div class="panel">
+                    <div class="panel-title">[1] INFRASTRUCTURE INTEL</div>
+                    <div id="domainMetrics"><div class="placeholder-text">[ WAITING FOR TELEMETRY ]</div></div>
+                </div>
+                <div class="panel">
+                    <div class="panel-title">[2] URL LEXICAL ANALYSIS</div>
+                    <div id="lexicalMetrics"><div class="placeholder-text">[ WAITING FOR TELEMETRY ]</div></div>
+                </div>
+            </div>
+
+            <div class="metrics-grid-2">
+                <div class="panel">
+                    <div class="panel-title">[3] THREAT INTELLIGENCE</div>
+                    <div id="threatIntel"><div class="placeholder-text">[ WAITING FOR TELEMETRY ]</div></div>
+                </div>
+                <div class="panel">
+                    <div class="panel-title">[4] THREAT GEOLOCATION</div>
+                    <div id="geoLocation"><div class="placeholder-text">[ WAITING FOR TELEMETRY ]</div></div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-title">[5] AI EXPLANATION ENGINE</div>
+                <div id="aiExplain"><div class="placeholder-text">[ WAITING FOR TELEMETRY ]</div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function runTerminalTheater() {
+            const terminal = document.getElementById("terminalPhase");
+            const content = document.getElementById("terminalContent");
+            terminal.style.display = "block";
+            content.innerHTML = "";
+
+            const logs = [
+                { msg: "[SYSTEM] Resolving target hostname...", type: "log-sys", delay: 200 },
+                { msg: "[INFO] Triangulating server geolocation...", type: "log-sys", delay: 300 },
+                { msg: "[INFO] Querying global threat feeds...", type: "log-sys", delay: 300 },
+                { msg: "[WARN] Engaging AI Explanation Engine...", type: "log-warn", delay: 400 },
+                { msg: "[OK] Telemetry acquired. Rendering UI.", type: "log-ok", delay: 300 }
+            ];
+
+            for (let log of logs) {
+                await new Promise(r => setTimeout(r, log.delay));
+                const p = document.createElement("div");
+                p.className = `log-line ${log.type}`;
+                p.innerText = `> ${log.msg}`;
+                content.appendChild(p);
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+            await new Promise(r => setTimeout(r, 400));
+            terminal.style.display = "none";
+        }
+
+        // Helper for terminal style dotted rows
+        function createDataRow(label, value, colorClass) {
+            return `
+                <div class="data-row">
+                    <div class="data-label">${label}</div>
+                    <div class="data-dots"></div>
+                    <div class="data-value ${colorClass}">[ ${value} ]</div>
+                </div>
+            `;
+        }
+
+        async function initiateScan() {
+            const urlInput = document.getElementById("urlInput").value;
+            const scanBtn = document.getElementById("scanBtn");
+            const dashboard = document.getElementById("dashboard");
+
+            if (!urlInput) return;
+
+            // Hide dashboard immediately on new scan
+            dashboard.style.display = "none";
+            scanBtn.disabled = true;
+            scanBtn.innerText = "PROCESSING...";
+
+            const terminalPromise = runTerminalTheater();
+
+            let data;
+            try {
+                const response = await fetch("/scan", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: urlInput })
+                });
+                data = await response.json();
+            } catch (err) {
+                data = { error: "Backend Connection Refused." };
+            }
+
+            await terminalPromise;
+            scanBtn.disabled = false;
+            scanBtn.innerText = "EXECUTE SCAN";
+
+            if (data.error) {
+                alert("SYSTEM ERROR: " + data.error);
+                return;
+            }
+
+            try {
+                // --- SAFE DATA PARSING ---
+                const riskScore = data.risk_score || 0;
+                let isSafe = riskScore < 40;
+                let isWarn = riskScore >= 40 && riskScore <= 60; // RED above 60
+                
+                let themeColor = isSafe ? 'var(--safe)' : (isWarn ? 'var(--warning)' : 'var(--danger)');
+                let themeGlow = isSafe ? 'var(--safe-glow)' : (isWarn ? 'var(--warning-glow)' : 'var(--danger-glow)');
+                let riskClass = isSafe ? "v-safe" : (isWarn ? "v-warn" : "v-danger");
+
+                const features = data.features || {};
+                
+                // Cut URL for display if it's too long
+                let displayUrl = data.url || urlInput;
+                if(displayUrl.length > 22) displayUrl = displayUrl.substring(0, 19) + "...";
+
+                // --- 1. VERDICT BANNER ---
+                const vPanel = document.getElementById('verdictPanel');
+                vPanel.style.borderColor = themeColor;
+                vPanel.style.boxShadow = `0 0 30px ${themeGlow} inset`;
+                
+                document.getElementById('riskScoreDisp').innerText = riskScore;
+                document.getElementById('riskScoreDisp').style.color = themeColor;
+                document.getElementById('riskScoreDisp').style.textShadow = `0 0 20px ${themeGlow}`;
+
+                document.getElementById('verdictTextDisp').innerText = isSafe ? "TARGET SECURE" : "THREAT DETECTED";
+                document.getElementById('verdictTextDisp').style.color = themeColor;
+
+                document.getElementById('verdictIcon').innerHTML = isSafe ? '<i class="fas fa-shield-check"></i>' : '<i class="fas fa-biohazard"></i>';
+                document.getElementById('verdictIcon').style.color = themeColor;
+                document.getElementById('verdictIcon').style.textShadow = `0 0 20px ${themeGlow}`;
+
+                // --- 2. METRICS GRID 1 ---
+                document.getElementById('overviewMetrics').innerHTML = `
+                    ${createDataRow('INPUT_TARGET', displayUrl, 'v-cyan')}
+                    ${createDataRow('FINAL_RESULT', data.result || 'UNKNOWN', riskClass)}
+                `;
+
+                document.getElementById('domainMetrics').innerHTML = `
+                    ${createDataRow('AGE_IN_DAYS', data.domain_age || 0, 'v-cyan')}
+                    ${createDataRow('SSL_CERT', data.ssl_valid ? 'VALID' : 'INVALID', data.ssl_valid ? 'v-safe' : 'v-danger')}
+                    ${createDataRow('REDIR_HOPS', data.redirects || 0, 'v-warn')}
+                `;
+
+                document.getElementById('lexicalMetrics').innerHTML = `
+                    ${createDataRow('URL_LENGTH', features.length || 0, 'v-cyan')}
+                    ${createDataRow('KEYWORDS', features.keywords || 0, features.keywords > 0 ? 'v-danger' : 'v-safe')}
+                    ${createDataRow('SUBDOMAINS', features.subdomains || 0, 'v-warn')}
+                    ${createDataRow('IP_ROUTING', features.has_ip ? 'DETECTED' : 'CLEAN', features.has_ip ? 'v-danger' : 'v-safe')}
+                `;
+
+                // --- 3. METRICS GRID 2 (Threat Intel & Geo) ---
+                let threatHTML = "";
+                if (data.threat_types && data.threat_types.length > 0) {
+                    data.threat_types.forEach(t => {
+                        threatHTML += createDataRow('THREAT_TAG', t.toUpperCase(), 'v-danger');
+                    });
+                } else {
+                    threatHTML = createDataRow('THREAT_TAG', 'NONE DETECTED', 'v-safe');
+                }
+                document.getElementById("threatIntel").innerHTML = threatHTML;
+
+                let geoHTML = "";
+                if (data.location) {
+                    geoHTML += createDataRow('COUNTRY', (data.location.country || "UNKNOWN").toUpperCase(), 'v-cyan');
+                    geoHTML += createDataRow('CITY', (data.location.city || "UNKNOWN").toUpperCase(), 'v-cyan');
+                    geoHTML += createDataRow('SOURCE_IP', data.location.ip || "UNKNOWN", 'v-warn');
+                } else {
+                    geoHTML = createDataRow('TRACEROUTE', 'UNAVAILABLE', 'v-text-muted');
+                }
+                document.getElementById("geoLocation").innerHTML = geoHTML;
+
+                // --- 4. AI EXPLANATION ENGINE ---
+                let explainHTML = "";
+                if (data.ai_explanation && data.ai_explanation.length > 0) {
+                    data.ai_explanation.forEach(e => {
+                        // Styled differently from the short dotted rows for readability
+                        explainHTML += `<div class="ai-row"><span>></span> ${e}</div>`;
+                    });
+                } else {
+                    explainHTML = `<div class="ai-row" style="opacity: 0.5;"><span>></span> No advanced AI heuristics generated for this target.</div>`;
+                }
+                document.getElementById("aiExplain").innerHTML = explainHTML;
+
+                // --- REVEAL DASHBOARD ---
+                dashboard.style.display = "flex";
+
+            } catch (renderError) {
+                console.error("UI Render Error:", renderError);
+                alert("Data received, but an error occurred while drawing the dashboard.");
+            }
+        }
+    </script>
+</body>
+</html>
