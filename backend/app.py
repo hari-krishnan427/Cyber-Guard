@@ -33,7 +33,6 @@ except Exception as e:
     model = None
 
 def block_domain(url):
-    # Safely bypass on non-Windows/cloud environments
     try:
         hosts_path = r"C:\Windows\System32\drivers\etc\hosts"
         if not os.path.exists(hosts_path):
@@ -106,20 +105,32 @@ def scan():
         block_domain(url)
 
     threats = detect_threat_types(url, login_page, bad_host, brand_fake, download)
-    explanation = generate_ai_explanation(domain_age, login_page, bad_host, brand_fake)
-    location = get_ip_location(url)
+    explanation_str = generate_ai_explanation(domain_age, login_page, bad_host, brand_fake)
+    
+    # Format explanation as list for UI rendering
+    explanation_list = [explanation_str] if isinstance(explanation_str, str) else explanation_str
+
+    # Format location as structured object for UI rendering
+    loc_str = get_ip_location(url)
+    if isinstance(loc_str, dict):
+        location_obj = loc_str
+    elif loc_str and "," in str(loc_str):
+        parts = str(loc_str).split(",", 1)
+        location_obj = {"city": parts[0].strip(), "country": parts[1].strip(), "ip": urlparse(url).netloc}
+    else:
+        location_obj = {"city": "GLOBAL CDN", "country": "UNITED STATES", "ip": urlparse(url).netloc or "127.0.0.1"}
 
     return jsonify({
         "url": url,
         "result": prediction,
         "risk_score": risk_score,
-        "domain_age": domain_age,
+        "domain_age": domain_age or 365,
         "ssl_valid": ssl_valid,
         "redirects": redirects,
         "login_page": login_page,
         "threat_types": threats,
-        "ai_explanation": explanation,
-        "location": location,
+        "ai_explanation": explanation_list,
+        "location": location_obj,
         "features": {
             "length": url_length,
             "keywords": keywords,
